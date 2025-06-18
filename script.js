@@ -1,6 +1,6 @@
 // --- App Setup & Configuration ---
 const app = document.getElementById('app');
-const API_BASE_URL = '/api'; // IMPORTANT: Update this to your Cloud Run URL
+const API_BASE_URL = 'https://hkpl-admin-backend.vercel.app/api'; // IMPORTANT: Update this to your Cloud Run URL
 
 // --- State Management ---
 let currentPage = 'overview'; // Default page
