@@ -9,8 +9,20 @@ const PORT = process.env.PORT || 5000; // Default to 5000 for local development
 
 // --- Firebase Admin SDK Initialization ---
 if (!admin.apps.length) {
+  const serviceAccountKeyString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  console.log('--- Debugging Firebase Key ---');
+  console.log('Is FIREBASE_SERVICE_ACCOUNT_KEY defined?', !!serviceAccountKeyString); // Check if it's not null/undefined/empty
+  if (serviceAccountKeyString) {
+    console.log('First 100 chars:', serviceAccountKeyString.substring(0, 100)); // See if it starts correctly
+    console.log('Last 100 chars:', serviceAccountKeyString.slice(-100)); // See if it ends correctly
+    console.log('Length:', serviceAccountKeyString.length);
+  } else {
+    console.log('FIREBASE_SERVICE_ACCOUNT_KEY is undefined or empty.');
+  }
+  console.log('--- End Debugging ---');
+
   admin.initializeApp({
-    credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY))
+    credential: admin.credential.cert(JSON.parse(serviceAccountKeyString))
   });
 }
 
