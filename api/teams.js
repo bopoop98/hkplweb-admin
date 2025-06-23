@@ -1,4 +1,4 @@
-const { db } = require('./firebasedb');
+const { db } = require('./firebase');
 
 const LEAGUE_BASE_PATH = 'artifacts/hkplweb/public/data/leagues/hkpl';
 const TEAMS_COLLECTION = `${LEAGUE_BASE_PATH}/teams`;
