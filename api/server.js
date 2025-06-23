@@ -3,63 +3,47 @@ const admin = require('firebase-admin');
 const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 5000; // Default to 5000 for local development
 
 // --- Firebase Admin SDK Initialization ---
-if (!admin.apps.length) {
-  try {
-    const serviceAccountKeyBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_KEY_BASE64;
-
-    if (!serviceAccountKeyBase64) {
-      console.error("FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 is not set!");
-      // Depending on your error handling, you might want to throw here
-      // or return an error response from your API calls.
-      return; // Prevent further execution if critical for initialization
-    }
-
-    const serviceAccountJsonString = Buffer.from(serviceAccountKeyBase64, 'base64').toString('utf8');
-    const serviceAccount = JSON.parse(serviceAccountJsonString);
-
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
-    });
-    console.log("Firebase Admin SDK initialized successfully."); // This log should appear now!
-  } catch (error) {
-    console.error("Error initializing Firebase Admin SDK:", error);
-    // This is where you would expect to see the JSON.parse error if it happens during decoding
-    // or any other error related to the key.
-  }
+let serviceAccount;
+if (process.env.NODE_ENV === 'production') {
+    serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY);
+} else {
+    serviceAccount = require('../backend/serviceAccountKey.json'); // Adjust path as needed
 }
 
-const db = admin.firestore(); // This is your privileged Firestore instance
+if (!admin.apps.length) {
+    admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+    });
+}
+
+const db = admin.firestore();
 
 // --- Middleware ---
-// Configure CORS to allow requests from your frontend's domain
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://127.0.0.1:3000', // Adjust for local dev and production
+    origin: process.env.FRONTEND_URL || 'http://127.0.0.1:3000',
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    credentials: true // If you send cookies/auth headers
+    credentials: true
 }));
-app.use(express.json()); // To parse JSON request bodies
+app.use(express.json());
 
-// --- Basic Admin Authentication Middleware (IMPORTANT!) ---
+
+// --- Authentication Middleware ---
 app.use(async (req, res, next) => {
     const idToken = req.headers.authorization?.split('Bearer ')[1];
-
     if (!idToken) {
         return res.status(401).json({ message: 'Unauthorized: No token provided.' });
     }
-
     try {
         const decodedToken = await admin.auth().verifyIdToken(idToken);
         req.user = decodedToken;
-        // Optionally, add logic here to check if the user has an 'admin' custom claim or is in a specific admin group
         next();
     } catch (error) {
-        console.error('Error verifying Firebase ID token:', error);
         res.status(403).json({ message: 'Unauthorized: Invalid token.' });
     }
 });
+
 
 // --- Constants for Firestore Paths ---
 const LEAGUE_BASE_PATH = 'artifacts/hkplweb/public/data/leagues/hkpl';
@@ -431,9 +415,5 @@ app.delete('/api/matches/:id', async (req, res) => {
     }
 });
 
-
-// --- Start Server ---
-app.listen(PORT, () => {
-    console.log(`Admin backend running on port ${PORT}`);
-    console.log(`Open in browser for testing: http://localhost:${PORT}`);
-});
+// --- Export the app for Vercel ---
+module.exports = app;
