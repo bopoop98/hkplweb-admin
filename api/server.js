@@ -84,7 +84,7 @@ app.get('/', (req, res) => {
 
 // 1. Teams Management
 // Fields: LogoUrl(string),draw(number),ga(number),gf(number),lost(number),name(string),name_mm(string),played(number),won(number)
-app.get('/api/teams', async (req, res) => {
+app.get('/teams', async (req, res) => {
     try {
         const snapshot = await db.collection(TEAMS_COLLECTION).get();
         const teams = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -95,7 +95,7 @@ app.get('/api/teams', async (req, res) => {
     }
 });
 
-app.post('/api/teams', async (req, res) => {
+app.post('/teams', async (req, res) => {
     try {
         const newTeamData = {
             LogoUrl: req.body.LogoUrl || '',
@@ -122,7 +122,7 @@ app.post('/api/teams', async (req, res) => {
     }
 });
 
-app.put('/api/teams/:id', async (req, res) => {
+app.put('/teams/:id', async (req, res) => {
     try {
         const teamId = req.params.id;
         const updatedData = {
@@ -147,7 +147,7 @@ app.put('/api/teams/:id', async (req, res) => {
     }
 });
 
-app.delete('/api/teams/:id', async (req, res) => {
+app.delete('/teams/:id', async (req, res) => {
     try {
         const teamId = req.params.id;
         await db.collection(TEAMS_COLLECTION).doc(teamId).delete();
@@ -161,7 +161,7 @@ app.delete('/api/teams/:id', async (req, res) => {
 
 // 2. Players Management
 // Fields: imageUrl(string), name(string), name_en(string), number(number), position(string), team_id(string)
-app.get('/api/players', async (req, res) => {
+app.get('/players', async (req, res) => {
     try {
         const snapshot = await db.collection(PLAYERS_COLLECTION).get();
         const players = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -172,7 +172,7 @@ app.get('/api/players', async (req, res) => {
     }
 });
 
-app.post('/api/players', async (req, res) => {
+app.post('/players', async (req, res) => {
     try {
         const newPlayerId = `hkpl_${db.collection(PLAYERS_COLLECTION).doc().id}`; // Generate Firebase auto-ID with prefix
         const newPlayerData = {
@@ -201,7 +201,7 @@ app.post('/api/players', async (req, res) => {
     }
 });
 
-app.put('/api/players/:id', async (req, res) => {
+app.put('/players/:id', async (req, res) => {
     try {
         const playerId = req.params.id;
         const updatedData = {
@@ -229,7 +229,7 @@ app.put('/api/players/:id', async (req, res) => {
     }
 });
 
-app.delete('/api/players/:id', async (req, res) => {
+app.delete('/players/:id', async (req, res) => {
     try {
         const playerId = req.params.id;
         await db.collection(PLAYERS_COLLECTION).doc(playerId).delete();
@@ -243,7 +243,7 @@ app.delete('/api/players/:id', async (req, res) => {
 
 // 3. News Management
 // Fields: body(string), date(timestamp), imgUrl(array), tags(array), title(string)
-app.get('/api/news', async (req, res) => {
+app.get('/news', async (req, res) => {
     try {
         const snapshot = await db.collection(NEWS_COLLECTION).orderBy('date', 'desc').get(); // Order by date for display
         const news = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -254,7 +254,7 @@ app.get('/api/news', async (req, res) => {
     }
 });
 
-app.post('/api/news', async (req, res) => {
+app.post('/news', async (req, res) => {
     try {
         const currentLocalDate = new Date().toISOString().slice(0, 10); // YYYY-MM-DD format
         const newNewsId = await generateDailySequentialId(db.collection(NEWS_COLLECTION), 'news', currentLocalDate);
@@ -279,7 +279,7 @@ app.post('/api/news', async (req, res) => {
     }
 });
 
-app.put('/api/news/:id', async (req, res) => {
+app.put('/news/:id', async (req, res) => {
     try {
         const newsId = req.params.id;
         const updatedData = {
@@ -299,7 +299,7 @@ app.put('/api/news/:id', async (req, res) => {
     }
 });
 
-app.delete('/api/news/:id', async (req, res) => {
+app.delete('/news/:id', async (req, res) => {
     try {
         const newsId = req.params.id;
         await db.collection(NEWS_COLLECTION).doc(newsId).delete();
@@ -313,7 +313,7 @@ app.delete('/api/news/:id', async (req, res) => {
 
 // 4. Matches Management
 // Fields: awayScore(number),awayTeamId(string),date(string),homeScore(number),homeTeamId(string),status(string),time(string)
-app.get('/api/matches', async (req, res) => {
+app.get('/matches', async (req, res) => {
     try {
         // Query matches, ordering by date (which is now Timestamp) and then time
         const snapshot = await db.collection(MATCHES_COLLECTION).orderBy('date', 'desc').orderBy('time', 'desc').get();
@@ -325,7 +325,7 @@ app.get('/api/matches', async (req, res) => {
     }
 });
 
-app.post('/api/matches', async (req, res) => {
+app.post('/matches', async (req, res) => {
     try {
         const matchDateStringDDMMYYYY = req.body.date; // Frontend sends DD-MM-YYYY
         if (!matchDateStringDDMMYYYY || !/^\d{2}-\d{2}-\d{4}$/.test(matchDateStringDDMMYYYY)) {
@@ -368,7 +368,7 @@ app.post('/api/matches', async (req, res) => {
     }
 });
 
-app.put('/api/matches/:id', async (req, res) => {
+app.put('/matches/:id', async (req, res) => {
     try {
         const matchId = req.params.id;
         const updatedData = {
@@ -404,7 +404,7 @@ app.put('/api/matches/:id', async (req, res) => {
     }
 });
 
-app.delete('/api/matches/:id', async (req, res) => {
+app.delete('/matches/:id', async (req, res) => {
     try {
         const matchId = req.params.id;
         await db.collection(MATCHES_COLLECTION).doc(matchId).delete();
