@@ -35,6 +35,38 @@ module.exports = async (req, res) => {
             console.error('Error adding team:', error);
             res.status(500).json({ message: 'Error adding team' });
         }
+    } else if (req.method === 'PUT') {
+        try {
+            const teamId = req.query.id;
+            if (!teamId) return res.status(400).json({ message: 'Team ID is required.' });
+            const updatedData = {
+                LogoUrl: req.body.LogoUrl,
+                draw: Number(req.body.draw),
+                ga: Number(req.body.ga),
+                gf: Number(req.body.gf),
+                lost: Number(req.body.lost),
+                name: req.body.name,
+                name_mm: req.body.name_mm,
+                played: Number(req.body.played),
+                won: Number(req.body.won),
+            };
+            Object.keys(updatedData).forEach(key => updatedData[key] === undefined && delete updatedData[key]);
+            await db.collection(TEAMS_COLLECTION).doc(teamId).update(updatedData);
+            res.json({ message: 'Team updated successfully' });
+        } catch (error) {
+            console.error('Error updating team:', error);
+            res.status(500).json({ message: 'Error updating team' });
+        }
+    } else if (req.method === 'DELETE') {
+        try {
+            const teamId = req.query.id;
+            if (!teamId) return res.status(400).json({ message: 'Team ID is required.' });
+            await db.collection(TEAMS_COLLECTION).doc(teamId).delete();
+            res.json({ message: 'Team deleted successfully' });
+        } catch (error) {
+            console.error('Error deleting team:', error);
+            res.status(500).json({ message: 'Error deleting team' });
+        }
     } else {
         res.status(405).json({ message: 'Method Not Allowed' });
     }
