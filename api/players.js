@@ -37,6 +37,41 @@ module.exports = async (req, res) => {
             console.error('Error adding player:', error);
             res.status(500).json({ message: 'Error adding player' });
         }
+    } else if (req.method === 'PUT') {
+        try {
+            const playerId = req.query.id;
+            if (!playerId) return res.status(400).json({ message: 'Player ID is required.' });
+            const updatedData = {
+                imageUrl: req.body.imageUrl,
+                name: req.body.name,
+                name_en: req.body.name_en,
+                number: Number(req.body.number),
+                position: req.body.position,
+                team_id: req.body.team_id,
+            };
+            Object.keys(updatedData).forEach(key => updatedData[key] === undefined && delete updatedData[key]);
+            if (updatedData.position) {
+                const allowedPositions = ['GK', 'DF', 'MF', 'FW'];
+                if (!allowedPositions.includes(updatedData.position)) {
+                    return res.status(400).json({ message: 'Invalid player position. Must be GK, DF, MF, or FW.' });
+                }
+            }
+            await db.collection(PLAYERS_COLLECTION).doc(playerId).update(updatedData);
+            res.json({ message: 'Player updated successfully' });
+        } catch (error) {
+            console.error('Error updating player:', error);
+            res.status(500).json({ message: 'Error updating player' });
+        }
+    } else if (req.method === 'DELETE') {
+        try {
+            const playerId = req.query.id;
+            if (!playerId) return res.status(400).json({ message: 'Player ID is required.' });
+            await db.collection(PLAYERS_COLLECTION).doc(playerId).delete();
+            res.json({ message: 'Player deleted successfully' });
+        } catch (error) {
+            console.error('Error deleting player:', error);
+            res.status(500).json({ message: 'Error deleting player' });
+        }
     } else {
         res.status(405).json({ message: 'Method Not Allowed' });
     }
