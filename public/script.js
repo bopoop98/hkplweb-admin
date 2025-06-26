@@ -4,8 +4,6 @@ const API_BASE_URL = '/api'; // IMPORTANT: Update this to your Cloud Run URL
 
 // --- State Management ---
 let currentPage = 'overview'; // Default page
-let teamsCache = []; // Cache teams data to avoid repeated API calls
-let allPlayersCache = []; // Cache all players data for client-side filtering
 
 // --- Helper & Utility Functions ---
 
@@ -18,13 +16,6 @@ function createSVG(dAttribute, color = "currentColor") {
     `;
 }
 
-// Generates a placeholder image URL from UI Avatars
-function generatePlaceholderImageUrl(name) {
-    if (!name) return `https://ui-avatars.com/api/?name=UK&background=random&color=fff&size=128`; // Fallback for empty name
-    const initials = name.split(' ').map(n => n[0]).join('').toUpperCase();
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials || name)}&background=random&color=fff&size=128`;
-}
-
 // Formats a Firestore Timestamp for display
 function formatTimestamp(timestamp) {
     if (!timestamp || !timestamp._seconds) return 'N/A';
@@ -33,43 +24,7 @@ function formatTimestamp(timestamp) {
 }
 
 // --- API Communication ---
-async function callAdminApi(endpoint, method = 'GET', data = null) {
-    const user = firebase.auth().currentUser;
-    if (!user) {
-        throw new Error('No authenticated user found. Please log in.');
-    }
-
-    const idToken = await user.getIdToken();
-    const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${idToken}`
-    };
-
-    const config = {
-        method: method,
-        headers: headers
-    };
-
-    if (data) {
-        config.body = JSON.stringify(data);
-    }
-
-    try {
-        const response = await fetch(`${API_BASE_URL}/${endpoint}`, config);
-        const responseData = await response.json();
-
-        if (!response.ok) {
-            const errorMessage = responseData.message || `HTTP error! status: ${response.status}`;
-            const error = new Error(errorMessage);
-            error.statusCode = response.status;
-            throw error;
-        }
-        return responseData;
-    } catch (error) {
-        console.error(`API Call Error (${method} ${endpoint}):`, error);
-        throw error;
-    }
-}
+import { formSchemas, showLoading, hideLoading, callAdminApi, allPlayersCache, setAllPlayersCache, teamsCache, getTeams, generatePlaceholderImageUrl } from './utils.js';
 
 // --- Sidebar Configuration ---
 const sidebarItems = [
@@ -218,14 +173,6 @@ function createTableHtml(headers, data, createRowCallback) {
     `;
 }
 
-
-async function getTeams() {
-    if (teamsCache.length === 0) {
-        teamsCache = await callAdminApi('teams');
-    }
-    return teamsCache;
-}
-
 async function updateMainContent() {
     const mainContentArea = document.getElementById('main-content-area');
     if (!mainContentArea) return;
@@ -257,7 +204,8 @@ async function updateMainContent() {
                     'Add Player',
                     async () => {
                         if (allPlayersCache.length === 0) {
-                            allPlayersCache = await callAdminApi('players');
+                            const players = await callAdminApi('players');
+                            setAllPlayersCache(players);
                         }
                         return allPlayersCache;
                     },
@@ -384,18 +332,23 @@ function createTeamsTableRow(team, index) {
 
 function createPlayersTable(players, teams) {
     const headers = [
-        { text: 'Image', class: 'w-[10%] image-col' },
-        { text: 'Name', class: 'w-[15%] player-name-col' },
-        { text: 'English Name', class: 'w-[15%] english-name-col' },
-        { text: 'Number', class: 'w-[10%] shirt-number-col text-center' },
-        { text: 'Position', class: 'w-[15%] position-col text-center' },
-        { text: 'Team', class: 'w-[20%] team-col' },
+        { text: 'Image', class: 'w-[8%] image-col' },
+        { text: 'Name', class: 'w-[12%] player-name-col' },
+        { text: 'English Name', class: 'w-[12%] english-name-col' },
+        { text: 'Number', class: 'w-[7%] shirt-number-col text-center' },
+        { text: 'Position', class: 'w-[8%] position-col text-center' },
+        { text: 'Team', class: 'w-[12%] team-col' },
+        { text: 'Matches', class: 'w-[7%] matches-played-col text-center' },
+        { text: 'Goals', class: 'w-[7%] goals-col text-center' },
+        { text: 'Assists', class: 'w-[7%] assists-col text-center' },
+        { text: 'Yellow', class: 'w-[7%] yellow-col text-center' },
+        { text: 'Red', class: 'w-[7%] red-col text-center' },
         { text: 'Actions', class: 'w-[5%] team-actions-col' }
     ];
     return createTableHtml(headers, players, (player, index) => createPlayersTableRow(player, index, teams));
 }
 
-function createPlayersTableRow(player, index, teams) { // teams is passed via options in renderEntityPage
+function createPlayersTableRow(player, index, teams) {
     const teamName = teams.find(t => t.id === player.team_id)?.name || 'Unknown';
     const imageUrl = player.imageUrl || generatePlaceholderImageUrl(player.name_en || player.name);
     return `
@@ -406,6 +359,11 @@ function createPlayersTableRow(player, index, teams) { // teams is passed via op
             <td class="shirt-number-col h-[72px] px-4 py-2 text-center text-gray-700">${player.number}</td>
             <td class="position-col h-[72px] px-4 py-2 text-center text-gray-700">${player.position}</td>
             <td class="team-col h-[72px] px-4 py-2 text-gray-700">${teamName}</td>
+            <td class="matches-played-col h-[72px] px-4 py-2 text-center text-gray-700">${player.matchesPlayed ?? 0}</td>
+            <td class="goals-col h-[72px] px-4 py-2 text-center text-gray-700">${player.goals ?? 0}</td>
+            <td class="assists-col h-[72px] px-4 py-2 text-center text-gray-700">${player.assists ?? 0}</td>
+            <td class="yellow-col h-[72px] px-4 py-2 text-center text-yellow-600 font-bold">${player.yellow_cards ?? 0}</td>
+            <td class="red-col h-[72px] px-4 py-2 text-center text-red-600 font-bold">${player.red_cards ?? 0}</td>
             <td class="team-actions-col h-[72px] px-4 py-2 text-sm font-bold">
                 <button data-id="${player.id}" class="edit-player-btn text-blue-600 hover:underline">Edit</button>
             </td>
@@ -541,391 +499,11 @@ const modalContainer = document.createElement('div');
 modalContainer.id = 'modal-container';
 document.body.appendChild(modalContainer);
 
-// --- Dynamic Form Modal Schema ---
-const formSchemas = {
-    player: [
-        { label: 'Player Name', name: 'name', type: 'text', required: true },
-        { label: 'Name (English)', name: 'name_en', type: 'text', required: true },
-        { label: 'Shirt Number', name: 'number', type: 'number', required: false },
-        { label: 'Team', name: 'team_id', type: 'select', required: true, optionsKey: 'teams' },
-        { label: 'Position', name: 'position', type: 'select', required: true, options: [
-            { value: '', label: 'Select Position' },
-            { value: 'GK', label: 'GK (Goalkeeper)' },
-            { value: 'DF', label: 'DF (Defender)' },
-            { value: 'MF', label: 'MF (Midfielder)' },
-            { value: 'FW', label: 'FW (Forward)' },
-        ] },
-        { label: 'Image URL', name: 'imageUrl', type: 'text', required: false },
-    ],
-    team: [
-        { label: 'Team ID (Shortform)', name: 'team_id', type: 'text', required: true },
-        { label: 'Logo URL', name: 'LogoUrl', type: 'text', required: false },
-        { label: 'Team Name', name: 'name', type: 'text', required: true },
-        { label: 'MM Name', name: 'name_mm', type: 'text', required: false },
-        { label: 'P', name: 'played', type: 'number', required: false },
-        { label: 'W', name: 'won', type: 'number', required: false },
-        { label: 'D', name: 'draw', type: 'number', required: false },
-        { label: 'L', name: 'lost', type: 'number', required: false },
-        { label: 'GF', name: 'gf', type: 'number', required: false },
-        { label: 'GA', name: 'ga', type: 'number', required: false },
-    ],
-    news: [
-        { label: 'Title', name: 'title', type: 'text', required: true },
-        { label: 'Body', name: 'body', type: 'richtext', required: true },
-        { label: 'Tags', name: 'tags', type: 'tags', required: false },
-        { label: 'Image URLs', name: 'imgUrl', type: 'imgurls', required: false },
-        { label: 'Author', name: 'author', type: 'hidden', required: false, default: 'admin' },
-    ],
-    match: [
-        { label: 'Date', name: 'date', type: 'date', required: true },
-        { label: 'Time', name: 'time', type: 'time', required: true },
-        { label: 'Home Team', name: 'home_team', type: 'select', required: true, optionsKey: 'teams' },
-        { label: 'Away Team', name: 'away_team', type: 'select', required: true, optionsKey: 'teams' },
-        { label: 'Home Team Score', name: 'home_score', type: 'number', required: true, maxLength: 2 },
-        { label: 'Away Team Score', name: 'away_score', type: 'number', required: true, maxLength: 2 },
-        { label: 'Status', name: 'status', type: 'select', required: true, options: [
-            { value: 'upcoming', label: 'Upcoming' },
-            { value: 'ongoing', label: 'Ongoing' },
-            { value: 'finished', label: 'Finished' },
-        ] },
-    ],
-};
+import { showFormModal } from './showFormModal.js';
 
 // --- Dynamic Form Modal Generator ---
-async function showFormModal(entityType, fetchDataFunction, submitApiEndpoint, editData = null) {
-    const schema = formSchemas[entityType];
-    let dataOptions = {};
-    if (entityType === 'player' || entityType === 'match') {
-        dataOptions.teams = await fetchDataFunction();
-    }
-    // Set modal title dynamically
-    const entityTitles = {
-        player: 'Add Player',
-        team: editData ? 'Edit Team' : 'Add Team',
-        news: 'Add News',
-        match: 'Add Match',
-    };
-    const title = entityTitles[entityType] || `Add ${entityType.charAt(0).toUpperCase() + entityType.slice(1)}`;
-
-    // Row-wise table for player and team
-    if (entityType === 'player' || entityType === 'team') {
-        // Generate table header row
-        const headerRow = schema.map(field => `<th class="px-4 py-3 text-left text-blue-800 text-sm font-medium leading-normal">${field.label}</th>`).join('') + '<th></th>';
-        // Generate input row function
-        function getInputRow(idx = 0, editDataRow = null) {
-            return schema.map(field => {
-                const value = editDataRow && field.name in editDataRow ? editDataRow[field.name] || '' : '';
-                // Number fields: narrow
-                if (["number", "played", "won", "draw", "lost", "gf", "ga"].includes(field.name) || field.type === 'number') {
-                    return `<td class=\"px-2 py-2\"><input type=\"number\" name=\"${field.name}\" class=\"w-16 px-1 py-1 border border-gray-300 rounded-md text-center\" ${field.required ? 'required' : ''} value=\"${value}\"></td>`;
-                }
-                // Image/Logo preview and input: small and square
-                if (entityType === 'player' && field.name === 'imageUrl') {
-                    return `<td class=\"px-2 py-2 text-center">
-                        <div class=\"player-image-preview aspect-square bg-cover rounded-full w-16 h-16 mx-auto mb-1\" style=\"background-image: url('${value || generatePlaceholderImageUrl(editDataRow?.name_en || editDataRow?.name || '')}');\"></div>
-                        <input type=\"text\" name=\"${field.name}\" class=\"w-24 px-1 py-1 border border-gray-300 rounded-md mt-1 text-xs player-image-url-input\" placeholder=\"Image URL (optional)\" value=\"${value}\">
-                    </td>`;
-                }
-                if (entityType === 'team' && field.name === 'LogoUrl') {
-                    return `<td class=\"px-2 py-2 text-center">
-                        <div class=\"team-logo-preview aspect-square bg-cover rounded-full w-16 h-16 mx-auto mb-1\" style=\"background-image: url('${value || generatePlaceholderImageUrl(editDataRow?.name || editDataRow?.name_mm || '')}');\"></div>
-                        <input type=\"text\" name=\"${field.name}\" class=\"w-24 px-1 py-1 border border-gray-300 rounded-md mt-1 text-xs team-logo-url-input\" placeholder=\"Logo URL (optional)\" value=\"${value}\">
-                    </td>`;
-                }
-                // Name fields: moderate width
-                if (["name", "name_en", "name_mm"].includes(field.name)) {
-                    return `<td class=\"px-2 py-2\"><input type=\"text\" name=\"${field.name}\" class=\"w-40 px-2 py-1 border border-gray-300 rounded-md\" ${field.required ? 'required' : ''} value=\"${value}\"></td>`;
-                }
-                // Select fields: moderate width
-                if (field.type === 'select') {
-                    const options = field.optionsKey && dataOptions[field.optionsKey]
-                        ? `<option value=\"\">Select</option>` + dataOptions[field.optionsKey].map(opt => `<option value=\"${opt.id}\" ${value == opt.id ? 'selected' : ''}>${opt.name}</option>`).join('')
-                        : (field.options || []).map(opt => `<option value=\"${opt.value}\" ${value == opt.value ? 'selected' : ''}>${opt.label}</option>`).join('');
-                    return `<td class=\"px-2 py-2\"><select name=\"${field.name}\" class=\"w-40 px-2 py-1 border border-gray-300 rounded-md\">${options}</select></td>`;
-                }
-                // Default: moderate width
-                return `<td class=\"px-2 py-2\"><input type=\"${field.type}\" name=\"${field.name}\" class=\"w-40 px-2 py-1 border border-gray-300 rounded-md\" ${field.required ? 'required' : ''} value=\"${value}\"></td>`;
-            }).join('') + `<td class=\"px-2 py-2 text-center\">${editData ? '' : '<button type=\"button\" class=\"remove-row-btn text-red-600 hover:text-red-800 text-sm font-bold\">Remove</button>'}</td>`;
-        }
-        modalContainer.innerHTML = `
-            <div class=\"fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex justify-center items-center\">
-                <div class=\"bg-white p-6 rounded-lg shadow-xl max-w-6xl w-full min-w-[900px] mx-4 relative\">
-                    <button class=\"modal-close-btn absolute top-3 right-3 text-gray-500 hover:text-gray-700 text-2xl font-bold\">&times;</button>
-                    <h2 class=\"text-gray-900 text-[22px] font-bold leading-tight tracking-[-0.015em] px-4 pb-3 pt-5\">${title}</h2>
-                    <form id=\"dynamic-form\" class=\"px-4 py-3\">
-                        <div class=\"flex overflow-x-auto rounded-xl border border-gray-200 bg-gray-50 mb-4\">
-                            <table class=\"flex-1 w-full min-w-max\">
-                                <thead><tr class=\"bg-blue-100\">${headerRow}</tr></thead>
-                                <tbody id=\"modal-input-rows\"><tr>${getInputRow(0, editData)}</tr></tbody>
-                            </table>
-                        </div>
-                        <div class=\"flex gap-3 flex-wrap justify-start mb-2\">
-                            ${editData ? '' : `<button type=\"button\" id=\"add-more-row-btn\" class=\"min-w-[84px] cursor-pointer rounded-xl h-10 px-4 bg-gray-200 text-gray-900 text-sm font-bold\">Add More ${entityType === 'player' ? 'Player' : 'Team'}</button>`}
-                            <button type=\"submit\" class=\"min-w-[84px] cursor-pointer rounded-xl h-10 px-4 bg-blue-600 text-white text-sm font-bold\">${editData ? 'Update' : `Submit ${entityType === 'player' ? 'Players' : 'Teams'}`}</button>
-                        </div>
-                        <p id=\"${entityType}-modal-message\" class=\"mt-4 text-sm px-4\"></p>
-                    </form>
-                </div>
-            </div>
-        `;
-        // Modal close logic
-        document.querySelector('.modal-close-btn').addEventListener('click', () => { modalContainer.innerHTML = ''; });
-        modalContainer.addEventListener('click', (e) => { if (e.target === modalContainer.firstElementChild) { modalContainer.innerHTML = ''; } });
-        modalContainer.querySelector('.bg-white').addEventListener('click', (e) => e.stopPropagation());
-        // Add/Remove row logic (disabled in edit mode)
-        if (!editData) {
-            const form = document.getElementById('dynamic-form');
-            const tableBody = form.querySelector('#modal-input-rows');
-            form.addEventListener('click', (e) => {
-                if (e.target.classList.contains('remove-row-btn')) {
-                    if (tableBody.children.length > 1) {
-                        e.target.closest('tr').remove();
-                    }
-                }
-            });
-            document.getElementById('add-more-row-btn').addEventListener('click', () => {
-                const newRow = document.createElement('tr');
-                newRow.innerHTML = getInputRow(tableBody.children.length);
-                tableBody.appendChild(newRow);
-            });
-        }
-        // Image/Logo preview update logic
-        function updateImagePreview(row, type) {
-            if (type === 'player') {
-                const nameInput = row.querySelector('input[name="name"]');
-                const nameEnInput = row.querySelector('input[name="name_en"]');
-                const imageUrlInput = row.querySelector('input[name="imageUrl"]');
-                const preview = row.querySelector('.player-image-preview');
-                function setPreview() {
-                    const url = imageUrlInput.value.trim();
-                    if (url) preview.style.backgroundImage = `url('${url}')`;
-                    else preview.style.backgroundImage = `url('${generatePlaceholderImageUrl(nameEnInput.value || nameInput.value)}')`;
-                }
-                nameInput.addEventListener('input', setPreview);
-                nameEnInput.addEventListener('input', setPreview);
-                imageUrlInput.addEventListener('input', setPreview);
-            }
-            if (type === 'team') {
-                const nameInput = row.querySelector('input[name="name"]');
-                const nameMmInput = row.querySelector('input[name="name_mm"]');
-                const logoUrlInput = row.querySelector('input[name="LogoUrl"]');
-                const preview = row.querySelector('.team-logo-preview');
-                function setPreview() {
-                    const url = logoUrlInput.value.trim();
-                    if (url) preview.style.backgroundImage = `url('${url}')`;
-                    else preview.style.backgroundImage = `url('${generatePlaceholderImageUrl(nameInput.value || nameMmInput.value)}')`;
-                }
-                nameInput.addEventListener('input', setPreview);
-                nameMmInput.addEventListener('input', setPreview);
-                logoUrlInput.addEventListener('input', setPreview);
-            }
-        }
-        // Attach preview logic to all rows
-        const tableBody = document.getElementById('modal-input-rows');
-        Array.from(tableBody.children).forEach(row => updateImagePreview(row, entityType));
-        // Attach preview logic to new rows
-        if (!editData) {
-            const observer = new MutationObserver(() => {
-                Array.from(tableBody.children).forEach(row => {
-                    if (!row._previewAttached) {
-                        updateImagePreview(row, entityType);
-                        row._previewAttached = true;
-                    }
-                });
-            });
-            observer.observe(tableBody, { childList: true });
-        }
-        // Form submit logic
-        const form = document.getElementById('dynamic-form');
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const rows = Array.from(tableBody.querySelectorAll('tr'));
-            const items = rows.map(row => {
-                const item = {};
-                schema.forEach((field, idx) => {
-                    const input = row.querySelector(`[name="${field.name}"]`);
-                    if (input) {
-                        item[field.name] = field.type === 'number' ? parseInt(input.value, 10) || 0 : input.value;
-                    }
-                });
-                // Fallbacks for image/logo
-                if (entityType === 'player' && !item.imageUrl) {
-                    item.imageUrl = generatePlaceholderImageUrl(item.name_en || item.name);
-                }
-                if (entityType === 'team' && !item.LogoUrl) {
-                    item.LogoUrl = generatePlaceholderImageUrl(item.name || item.name_mm);
-                }
-                return item;
-            });
-            const modalMessage = document.getElementById(`${entityType}-modal-message`);
-            showLoading();
-            try {
-                if (editData && editData.id) {
-                    await callAdminApi(submitApiEndpoint, 'PUT', items[0]);
-                    modalMessage.textContent = `${title} updated successfully!`;
-                } else {
-                    await Promise.all(items.map(data => callAdminApi(submitApiEndpoint, 'POST', data)));
-                    modalMessage.textContent = `${title} added successfully!`;
-                }
-                modalMessage.className = 'mt-4 text-sm px-4 text-green-600';
-                // Reload only the relevant data for this entity
-                if (entityType === 'team') teamsCache = [];
-                if (entityType === 'player') allPlayersCache = [];
-                setTimeout(() => { hideLoading(); modalContainer.innerHTML = ''; updateMainContent(); }, 1200);
-            } catch (error) {
-                hideLoading();
-                modalMessage.textContent = `Error: ${error.message}`;
-                modalMessage.className = 'mt-4 text-sm px-4 text-red-600';
-            }
-        });
-        return;
-    }
-    // Match modal special logic
-    if (entityType === 'match') {
-        // If editing, show team names, date, and time as readonly text fields
-        let homeTeamName = '', awayTeamName = '', dateValue = '', timeValue = '', homeScore = '', awayScore = '', statusValue = '';
-        if (editData) {
-            // Find team names from teamsCache
-            const teams = Array.isArray(teamsCache) && teamsCache.length > 0 ? teamsCache : await getTeams();
-            const homeTeam = teams.find(t => t.id == editData.home_team);
-            const awayTeam = teams.find(t => t.id == editData.away_team);
-            homeTeamName = homeTeam ? homeTeam.name : (editData.home_team || '[No Home Team]');
-            awayTeamName = awayTeam ? awayTeam.name : (editData.away_team || '[No Away Team]');
-            dateValue = editData.date || '[No Date]';
-            timeValue = editData.time || '[No Time]';
-            homeScore = editData.home_score ?? '';
-            awayScore = editData.away_score ?? '';
-            statusValue = editData.status || '';
-        }
-        modalContainer.innerHTML = `
-            <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex justify-center items-center">
-                <div class="bg-white p-6 rounded-lg shadow-xl max-w-2xl w-full min-w-[500px] mx-4 relative border-4 border-blue-400">
-                    <button class="modal-close-btn absolute top-3 right-3 text-gray-500 hover:text-gray-700 text-2xl font-bold">&times;</button>
-                    <h2 class="text-gray-900 text-[22px] font-bold leading-tight tracking-[-0.015em] px-4 pb-3 pt-5">${editData ? 'Edit Match' : 'Add Match'}</h2>
-                    <form id="add-match-form" class="px-4 py-3 space-y-4">
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Date *</label>
-                                ${editData ? `<input type="text" class="w-full px-2 py-1 border border-gray-200 rounded-md bg-gray-100 text-gray-500" value="${dateValue}" readonly>` : `<input type="date" id="addMatchDate" class="w-full px-2 py-1 border border-gray-300 rounded-md" required>`}
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Time *</label>
-                                ${editData ? `<input type="text" class="w-full px-2 py-1 border border-gray-200 rounded-md bg-gray-100 text-gray-500" value="${timeValue}" readonly>` : `<input type="time" id="addMatchTime" class="w-full px-2 py-1 border border-gray-300 rounded-md" required>`}
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Home Team *</label>
-                                ${editData ? `<input type="text" class="w-full px-2 py-1 border border-gray-200 rounded-md bg-gray-100 text-gray-500" value="${homeTeamName}" readonly>` : `<select id="addMatchHomeTeamId" class="w-full px-2 py-1 border border-gray-300 rounded-md" required><option value="">Select Home Team</option>${dataOptions.teams.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}</select>`}
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Away Team *</label>
-                                ${editData ? `<input type="text" class="w-full px-2 py-1 border border-gray-200 rounded-md bg-gray-100 text-gray-500" value="${awayTeamName}" readonly>` : `<select id="addMatchAwayTeamId" class="w-full px-2 py-1 border border-gray-300 rounded-md" required><option value="">Select Away Team</option>${dataOptions.teams.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}</select>`}
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Home Team Score *</label>
-                                <input type="number" id="addMatchHomeScore" class="w-20 px-2 py-1 border border-gray-300 rounded-md text-center" maxlength="2" min="0" max="99" required value="${homeScore}">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Away Team Score *</label>
-                                <input type="number" id="addMatchAwayScore" class="w-20 px-2 py-1 border border-gray-300 rounded-md text-center" maxlength="2" min="0" max="99" required value="${awayScore}">
-                            </div>
-                            <div class="col-span-2">
-                                <label class="block text-sm font-medium mb-1">Status *</label>
-                                <select id="addMatchStatus" class="w-full px-2 py-1 border border-gray-300 rounded-md" required>
-                                    <option value="upcoming" ${statusValue === 'upcoming' ? 'selected' : ''}>Upcoming</option>
-                                    <option value="ongoing" ${statusValue === 'ongoing' ? 'selected' : ''}>Ongoing</option>
-                                    <option value="finished" ${statusValue === 'finished' ? 'selected' : ''}>Finished</option>
-                                </select>
-                            </div>
-                        </div>
-                        <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-md font-bold mt-4">${editData ? 'Update' : 'Submit'}</button>
-                        <p id="match-form-message" class="mt-4 text-sm px-4"></p>
-                    </form>
-                </div>
-            </div>
-        `;
-        // Modal close logic
-        document.querySelector('.modal-close-btn').addEventListener('click', () => { modalContainer.innerHTML = ''; });
-        modalContainer.addEventListener('click', (e) => { if (e.target === modalContainer.firstElementChild) { modalContainer.innerHTML = ''; } });
-        modalContainer.querySelector('.bg-white').addEventListener('click', (e) => e.stopPropagation());
-        // Only add team filtering if not edit mode
-        if (!editData) {
-            const homeSelect = document.getElementById('addMatchHomeTeamId');
-            const awaySelect = document.getElementById('addMatchAwayTeamId');
-            homeSelect.addEventListener('change', () => {
-                const homeId = homeSelect.value;
-                Array.from(awaySelect.options).forEach(opt => {
-                    opt.disabled = (opt.value && opt.value === homeId);
-                });
-            });
-        }
-        // Add match form submission
-        document.getElementById('add-match-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            let matchData;
-            const modalMessage = document.getElementById('match-form-message');
-            showLoading();
-            if (editData) {
-                // Only allow editing scores and status
-                matchData = {
-                    homeScore: parseInt(document.getElementById('addMatchHomeScore').value) || 0,
-                    awayScore: parseInt(document.getElementById('addMatchAwayScore').value) || 0,
-                    status: document.getElementById('addMatchStatus').value,
-                };
-            } else {
-                const rawDate = document.getElementById('addMatchDate').value; // YYYY-MM-DD
-                if (!rawDate) {
-                    modalMessage.textContent = 'Date is required.';
-                    modalMessage.className = 'mt-4 text-sm text-red-600';
-                    hideLoading();
-                    return;
-                }
-                const [yearFull, month, day] = rawDate.split('-');
-                const formattedDate = `${day}-${month}-${yearFull}`; // Convert to DD-MM-YYYY for backend
-                let rawTime = document.getElementById('addMatchTime').value; // 'HH:MM'
-                let formattedTime = '';
-                if (rawTime) {
-                    let [hour, minute] = rawTime.split(':');
-                    hour = parseInt(hour, 10);
-                    let period = 'AM';
-                    if (hour === 0) {
-                        hour = 12;
-                    } else if (hour === 12) {
-                        period = 'PM';
-                    } else if (hour > 12) {
-                        hour -= 12;
-                        period = 'PM';
-                    }
-                    formattedTime = `${String(hour).padStart(2, '0')}:${minute} ${period}`;
-                }
-                matchData = {
-                    date: formattedDate, // Send as DD-MM-YYYY string
-                    time: formattedTime, // Send as HH:MM AM/PM string
-                    homeTeamId: document.getElementById('addMatchHomeTeamId').value,
-                    homeScore: parseInt(document.getElementById('addMatchHomeScore').value) || 0,
-                    awayTeamId: document.getElementById('addMatchAwayTeamId').value,
-                    awayScore: parseInt(document.getElementById('addMatchAwayScore').value) || 0,
-                    status: document.getElementById('addMatchStatus').value,
-                };
-            }
-            try {
-                if (editData && editData.id) {
-                    await callAdminApi(submitApiEndpoint, 'PUT', matchData);
-                    modalMessage.textContent = 'Match updated successfully!';
-                } else {
-                    await callAdminApi('matches', 'POST', matchData);
-                    modalMessage.textContent = 'Match added successfully!';
-                }
-                modalMessage.className = 'mt-4 text-sm text-green-600';
-                setTimeout(() => { hideLoading(); modalContainer.innerHTML = ''; updateMainContent(); }, 1200);
-            } catch (error) {
-                hideLoading();
-                modalMessage.textContent = `Error: ${error.message}`;
-                modalMessage.className = 'mt-4 text-sm px-4 text-red-600';
-            }
-        });
-        return;
-    }
-}
+// function showFormModal(entityType, fetchDataFunction, submitApiEndpoint, editData = null) { ... }
+// (moved to showFormModal.js)
 
 // --- App Initialization & Event Listeners ---
 
@@ -975,6 +553,7 @@ if (app) {
             await showFormModal('team', getTeams, 'teams');
         }
         if (target.id === 'add-player-btn') {
+           
             await showFormModal('player', getTeams, 'players');
         }
         if (target.id === 'add-match-btn') {
@@ -1024,6 +603,12 @@ if (app) {
                     team_id: player.team_id,
                     position: player.position,
                     imageUrl: player.imageUrl,
+                    // --- Add stat fields for edit modal ---
+                    matchesPlayed: player.matchesPlayed ?? 0,
+                    goals: player.goals ?? 0,
+                    assists: player.assists ?? 0,
+                    yellowCard: player.yellow_cards ?? 0,
+                    redCard: player.red_cards ?? 0,
                     id: player.id
                 };
                 await showFormModal('player', getTeams, `players/${player.id}`, editData);
@@ -1051,37 +636,14 @@ if (app) {
         }
         if (target.classList.contains('edit-news-btn')) {
             const id = target.dataset.id;
-            callAdminApi('news').then(newsList => {
-                const newsItem = newsList.find(n => n.id == id);
-                if (newsItem) {
-                    showFormModal('news', async () => [], 'news', newsItem);
-                }
-            });
+            const newsList = await callAdminApi('news');
+            const newsItem = newsList.find(n => n.id == id);
+            if (newsItem) {
+                await showFormModal('news', async () => [], 'news', newsItem);
+            }
             return;
         }
     });
 }
 
-// --- Loading Animation Utility ---
-function showLoading(targetSelector = 'body') {
-    const target = document.querySelector(targetSelector) || document.body;
-    let loader = target.querySelector('.inline-loading-spinner');
-    if (!loader) {
-        loader = document.createElement('div');
-        loader.className = 'inline-loading-spinner flex justify-center items-center py-8';
-        loader.innerHTML = `
-            <span class="relative flex h-12 w-12 items-center justify-center">
-                <span class="absolute inline-flex h-12 w-12 rounded-full bg-blue-400 opacity-30 animate-ping"></span>
-                <span class="relative inline-flex h-12 w-12 items-center justify-center">
-                    <span class="block h-12 w-12 rounded-full border-4 border-blue-500 border-t-transparent animate-spin"></span>
-                </span>
-            </span>
-        `;
-        target.appendChild(loader);
-    }
-}
-function hideLoading(targetSelector = 'body') {
-    const target = document.querySelector(targetSelector) || document.body;
-    const loader = target.querySelector('.inline-loading-spinner');
-    if (loader) loader.remove();
-}
+window.updateMainContent = updateMainContent;
