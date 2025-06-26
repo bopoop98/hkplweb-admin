@@ -35,7 +35,9 @@ const firebaseConfig = {
   measurementId: "${escape(process.env.FIREBASE_MEASUREMENT_ID)}"
 };
 
-export default firebaseConfig;
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
 `;
 
 const outputPath = path.join(__dirname, 'public', 'config.js');
