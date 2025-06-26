@@ -34,6 +34,33 @@ module.exports = async (req, res) => {
             console.error('Error adding news:', error);
             res.status(500).json({ message: 'Error adding news' });
         }
+    } else if (req.method === 'PUT') {
+        try {
+            const newsId = req.query.id;
+            if (!newsId) return res.status(400).json({ message: 'News ID is required.' });
+            const updatedData = {
+                body: req.body.body,
+                imgUrl: Array.isArray(req.body.imgUrl) ? req.body.imgUrl : undefined,
+                tags: Array.isArray(req.body.tags) ? req.body.tags : undefined,
+                title: req.body.title,
+            };
+            Object.keys(updatedData).forEach(key => updatedData[key] === undefined && delete updatedData[key]);
+            await db.collection(NEWS_COLLECTION).doc(newsId).update(updatedData);
+            res.json({ message: 'News article updated successfully' });
+        } catch (error) {
+            console.error('Error updating news:', error);
+            res.status(500).json({ message: 'Error updating news' });
+        }
+    } else if (req.method === 'DELETE') {
+        try {
+            const newsId = req.query.id;
+            if (!newsId) return res.status(400).json({ message: 'News ID is required.' });
+            await db.collection(NEWS_COLLECTION).doc(newsId).delete();
+            res.json({ message: 'News article deleted successfully' });
+        } catch (error) {
+            console.error('Error deleting news:', error);
+            res.status(500).json({ message: 'Error deleting news' });
+        }
     } else {
         res.status(405).json({ message: 'Method Not Allowed' });
     }
